@@ -6,7 +6,29 @@
 
 #IncludeRegexTransform: 
 
-/tmp/tmp.3ZqQFzGq6g/main.c
+/tmp/tmp.Z02p1E6H2N/main.c
 stdio.h
 -
+stdio.h
+-
+stdlib.h
+-
+string.h
+-
+pthread.h
+-
+stdint.h
+-
+sys/types.h
+-
+sys/time.h
+-
+assert.h
+-
+unistd.h
+-
+queue.h
+/tmp/tmp.Z02p1E6H2N/queue.h
+
+/tmp/tmp.Z02p1E6H2N/queue.h
 

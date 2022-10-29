@@ -9,7 +9,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include "queue.h"
-#define NCLERKTHREDS 5
+#define NCLERKTHREADS 5
 
 
 struct customer{ //use this struct to record the customer information read from customers.txt
@@ -48,7 +48,7 @@ pthread_cond_t clerk4_cv;
 
 
 void read_file(FILE *file, int size, struct customer p_list[] );
-void* passenger_handler(void* passenger);
+void* passenger_handler(void* p_info);
 void* clerk_handler();
 
 
@@ -196,10 +196,10 @@ int main(int argc, char *argv[]) {
         exit(0);
     }
     // create clerks
-    struct clerk clerk_list[NCLERKTHREDS];
-    pthread_t clerk_id[NCLERKTHREDS-1];
+    struct clerk clerk_list[NCLERKTHREADS];
+    pthread_t clerk_id[NCLERKTHREADS - 1];
 
-    for (int i = 0; i < NCLERKTHREDS; ++i) {
+    for (int i = 0; i < NCLERKTHREADS; ++i) {
         if(pthread_create(&clerk_id[i], NULL, clerk_handler, (void *) &clerk_list[i]) != 0){
             printf("can't create clerk_handler thread %d\n", i);
         }
