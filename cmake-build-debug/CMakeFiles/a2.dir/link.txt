@@ -1,1 +1,0 @@
-/usr/bin/cc -g   CMakeFiles/a2.dir/main.c.o CMakeFiles/a2.dir/queue.c.o  -o a2 

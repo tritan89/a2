@@ -22,13 +22,12 @@ struct customer{
 
 };
 
-struct clerk{
-    int struct_clerk_id;
-};
+int size;
+int count;
 
 pthread_mutex_t  queue1_mutex;
 pthread_mutex_t  queue2_mutex;
-
+pthread_mutex_t count_mutex;
 pthread_cond_t queue1_cv;
 pthread_cond_t queue2_cv;
 
@@ -57,70 +56,80 @@ int clerk_signal;
 
 int q1_len;
 int q2_len;
-int q1_status=0;// 0 for clear 1 for busy
-int q2_status=0;// 0 for clear 1 for busy
 Queue* q1;// business class
 Queue* q2;// economy class
 struct customer passenger_list[100];
 
 void* clerk_handler(void* clerk_id) {
+    usleep(100);
+    int cid = *(int *)clerk_id;
+    printf("clerk id %d\n", cid);
 
-    int clerkid = *(int *)clerk_id;
-    printf("clerk id %d\n", clerkid);
-    free(clerk_id);
     struct customer passenger;
     int qid;
-    //free(clerk_id);
-    //usleep(100);
 
     while (1) {
+        if(count == size){
+            printf("thread %d done\n", cid);
+            break;
+        }
 
-        //check if business queue is not empty
         qid = 0;
+
         pthread_mutex_lock(&queue1_mutex);
-        pthread_mutex_lock(&queue2_mutex);
-        //if business is empty check econ
-        if (q1_len != 0) {
-            printf("q1 selected%d\n", clerkid);
+        if (q1_len != 0) { //check if business queue is not empty
+            printf("q1 selected%d\n", cid);
             qid =1;
 
-            pthread_mutex_unlock(&queue2_mutex);
-        }
-        else if (q2_len != 0) { // if econ is empty ignore
-            printf("q2 selected%d\n", clerkid);
-            qid =2;
-            pthread_mutex_unlock(&queue1_mutex);
-        }
-        //will always pick business queue over economy queue
 
-        //sleep if no customers
-        if (qid ==0){
-            printf("clerk %d sleeping\n", clerkid);
+        }
+        if(qid != 1)// if not in business
+        {
+            pthread_mutex_lock(&queue2_mutex);
+            if (q2_len != 0) { // Businness empty pick econ
+                printf("q2 selected%d\n", cid);
+                qid = 2;
+
+            }
+        }
+
+        if(qid == 0){  //sleep if no customers and check again
             pthread_mutex_unlock(&queue1_mutex);
             pthread_mutex_unlock(&queue2_mutex);
+            printf("clerk %d sleeping\n", cid);
             usleep(11);
+
+            if ( count == size ){
+                printf("loop done");
+                break;
+            }
             continue;
 
-        }
+         }
+        //will always pick business queue over economy queue
+
+
+
         // we have 2 queues with all the customers being added to them
         //wait for q1 to be clear
 
-        if(qid ==1) {
-            pthread_mutex_lock(&q1_status_mutex);
+        if(qid ==1) { // serving business queue
             printf("q1 begin serving\n ");
-            while (q1_status != 0) {
-                pthread_mutex_unlock(&q1_status_mutex);
-                usleep(11);
-                pthread_mutex_lock(&q1_status_mutex);
-            }
-            //q1_status locked from while loop
-            q1_status = 1;
 
-            //pthread_mutex_lock(&queue1_mutex);
-            passenger = passenger_list[dequeue(q1)];
+            while (pthread_mutex_trylock(&q1_status_mutex) != 0) {
+
+                usleep(11);
+
+            }
+            pthread_mutex_lock(&queue1_mutex);
+            passenger = passenger_list[dequeue(q1)]; //get passenger info
             q1_len--;
             usleep(passenger.service_time*100000);
-            printf("passenger serverd %d\n", passenger.id     );
+            pthread_mutex_lock(&count_mutex);
+            count++;
+            printf("count :%d\n", count);
+            pthread_mutex_unlock(&count_mutex);
+            printf(" q2 passenger serverd %d\n", passenger.id     );
             pthread_mutex_unlock(&queue1_mutex);
             pthread_mutex_unlock(&q1_status_mutex);
 
@@ -128,20 +137,22 @@ void* clerk_handler(void* clerk_id) {
         }
         //wait for q2 to be clear
         if(qid ==2){
-            printf("q2 begin serving\n ");
-            //pthread_mutex_lock(&q2_status_mutex);
-            while (q2_status != 0) {
-                pthread_mutex_unlock(&q2_status_mutex);
-                usleep(11);
-                pthread_mutex_lock(&q2_status_mutex);
-            }
-            q2_status = 1;
 
+            printf("q2 begin serving\n ");
+            while (pthread_mutex_trylock(&q2_status_mutex) != 0) {
+
+                usleep(11);
+
+            }
             pthread_mutex_lock(&queue2_mutex);
-            passenger = passenger_list[dequeue(q2)];
+            passenger = passenger_list[dequeue(q2)]; //get passenger info
             q2_len--;
             usleep(passenger.service_time*100000);
-            printf("passenger serverd %d\n", passenger.id     );
+            pthread_mutex_lock(&count_mutex);
+            count++;
+            printf("count :%d\n", count);
+            pthread_mutex_unlock(&count_mutex);
+            printf(" q2 passenger serverd %d\n", passenger.id     );
             pthread_mutex_unlock(&queue2_mutex);
             pthread_mutex_unlock(&q2_status_mutex);
 
@@ -150,23 +161,19 @@ void* clerk_handler(void* clerk_id) {
 
 
 
-        if (q1_len == 0 && q2_len ==0){
-            printf("loop done");
-            break;
-        }
+
 
     }
 
+    free(clerk_id);
 
-    pthread_exit(NULL);
 }
 
 
     void *passenger_handler(void *p_info) {
         struct customer *passenger = (struct customer *) p_info;
-        printf(" in thread %d,%d,%d,%d\n", passenger->id, passenger->class, passenger->arrival_time,
-               passenger->service_time);
-        usleep(passenger->arrival_time * 100000);
+
+
 
 
         if (passenger->class == 1) {
@@ -175,21 +182,20 @@ void* clerk_handler(void* clerk_id) {
             enqueue(q1, passenger->id);
             q1_len++;
             pthread_mutex_unlock(&queue1_mutex);
+
+
         } else {
-
-
             pthread_mutex_lock(&queue2_mutex);
-
-
             enqueue(q2, passenger->id);
-
-
             q2_len++;
             pthread_mutex_unlock(&queue2_mutex);
 
+
+
         }
+        usleep(passenger->arrival_time * 100000);
         fprintf(stdout, "A customer arrives: customer ID %2d. \n", passenger->id);
-        pthread_exit(NULL);
+
         //add time start clock
 
         // got to check which clerk signaled me
@@ -220,7 +226,7 @@ void* clerk_handler(void* clerk_id) {
         // wait for clerk_signal from clerk
 
 
-
+        pthread_exit(NULL);
     }
 
 
@@ -257,7 +263,8 @@ void* clerk_handler(void* clerk_id) {
 
         char buff[200];
         fgets(buff, 200, file);
-        int size = atoi(buff); //get num of passengers and remove first line
+        size = atoi(buff); //get num of passengers and remove first line
+        count = 0;
         q1 = createQueue(size);
         q2 = createQueue(size);
         //struct customer passenger_list[size];
@@ -310,6 +317,21 @@ void* clerk_handler(void* clerk_id) {
 
 
         // create clerks
+        pthread_t clerk_id[5];
+
+        for (int i = 0; i < 5; ++i) {
+
+            int* temp =  malloc(sizeof(int));
+            *temp = i;
+
+            if (pthread_create(&clerk_id[i], NULL, &clerk_handler, temp )!=0 ) {
+                printf("can't create clerk_handler thread %d\n", i);
+                exit(0);
+            }
+
+
+        }
+
 
         // create passengers
 
@@ -330,22 +352,6 @@ void* clerk_handler(void* clerk_id) {
 
         }
 
-
-        pthread_t clerk_id[5];
-
-        for (int i = 0; i < 5; ++i) {
-
-            int* temp =  malloc(sizeof(int));
-            *temp = i;
-
-            if (pthread_create(&clerk_id[i], NULL, &clerk_handler, temp )!=0 ) {
-                printf("can't create clerk_handler thread %d\n", i);
-                exit(0);
-            }
-
-
-        }
-
         for (int i = 0; i < 5 ; ++i) {
             if(pthread_join(clerk_id[i], NULL)!=0){
                 printf("cannot join thread.\n");
@@ -354,6 +360,16 @@ void* clerk_handler(void* clerk_id) {
 
         }
 
+
+
+        pthread_mutex_destroy(&clerk_sig_mutex);
+        pthread_mutex_destroy(&queue1_mutex);
+        pthread_mutex_destroy(&queue2_mutex);
+        pthread_mutex_destroy(&q1_status_mutex);
+        pthread_mutex_destroy(&q2_status_mutex);
+        pthread_mutex_destroy(&time_mutex);
+        pthread_mutex_destroy(&q1_status_mutex);
+        pthread_cond_destroy(&clerk_sig_cv);
         return 0;
         //@todo
         //add passenger list to two queues

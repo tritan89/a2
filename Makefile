@@ -2,7 +2,7 @@
 all: p2
 
 p2: main.c queue.c
-	gcc -w -pthread main.c queue.c -o p2
+	gcc -pthread main.c queue.c -o p2
 
 .PHONY clean:
 clean:
